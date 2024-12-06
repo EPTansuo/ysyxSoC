@@ -12,18 +12,18 @@ class bitrevChisel extends RawModule { // we do not need clock and reset
   io.miso := true.B
 
   // ss 低电平片选, 没有被片选中时就复位
-  val bitregs = withClockAndReset(io.sck.asClock, !io.ss.asBool) { RegInit(0.U(8.W)) }
-  val counter = withClockAndReset(io.sck.asClock, !io.ss.asBool) { RegInit(0.U(3.W)) }
-  val sending = withClockAndReset(io.sck.asClock, !io.ss.asBool) { RegInit(0.U(1.W))}
+  val bitregs = withClockAndReset(io.sck.asClock, io.ss.asBool) { RegInit(0.U(8.W)) }
+  val counter = withClockAndReset(io.sck.asClock, io.ss.asBool) { RegInit(0.U(3.W)) }
+  val sending = withClockAndReset(io.sck.asClock, io.ss.asBool) { RegInit(0.U(1.W))}
 
   counter := counter + 1.U
-  bitregs := Cat(bitregs(6,0), io.mosi)
+  bitregs := Mux(!sending, Cat(bitregs(6,0), io.mosi), Cat(io.mosi, bitregs(7,1)))
 
   when(counter === 7.U) {
     sending := ~sending
   }
   
   when(sending === 1.U) {
-    io.miso := bitregs(7)
+    io.miso := bitregs(0)
   }
 }
