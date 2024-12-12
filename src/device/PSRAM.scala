@@ -141,7 +141,10 @@ class psramChisel extends RawModule {
   
   dontTouch(dout)
   withClockAndReset(io.sck.asClock, io.ce_n.asBool) {
-   //assert(((cmd === 0xEB.U) || (cmd === 0x38.U)) ^ (state === s_addr), "Invalid cmd: Only support 0xEB and 0x38!" )
+    when(state === s_wait || state === s_data){
+      assert(((cmd === 0xEB.U) || (cmd === 0x38.U)) , "Invalid cmd: Only support 0xEB and 0x38!" )
+    }
+
   }
   
 }
