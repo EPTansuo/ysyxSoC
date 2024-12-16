@@ -86,6 +86,7 @@ class vgaChisel extends Module {
 
   when(io.in.psel & io.in.penable & io.in.pwrite){
     fb(addr) := io.in.pwdata
+    //WARNING: OMIT pstrb, assuming full write
   }
 
   io.in.pready := true.B

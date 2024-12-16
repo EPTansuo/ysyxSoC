@@ -46,149 +46,7 @@ class sdram extends BlackBox {
 }
 
 
-class sdramBlock extends BlackBox with HasBlackBoxInline {
-  val io = IO(new Bundle {
-    val clk      = Input(Clock())
-    val bank     = Input(UInt(2.W))
-    val col      = Input(UInt(9.W))
-    val row      = Input(UInt(13.W))
-    val data_in  = Input(UInt(16.W))
-    val we       = Input(Bool())
-    val data_out = Output(UInt(16.W))
-    val dqm      = Input(UInt(2.W))
-  })
-  setInline(
-    "sdramBlock.v",
-    """
-      |module sdramBlock(
-      |    input wire clk,
-      |    input wire [1:0] bank,
-      |    input wire [12:0] row,
-      |    input wire [8:0] col,
-      |    input wire [15:0] data_in,
-      |    input wire we,
-      |    output reg [15:0] data_out,
-      |    input wire [1:0] dqm
-      |);
-      |    reg [15:0] regFile [3:0][8191:0][511:0];
-      |
-      |    always @(posedge clk) begin
-      |           if(we) begin
-      |            if (dqm[0] == 0) begin
-      |                regFile[bank][row][col][7:0] <= data_in[7:0];
-      |            end
-      |            if (dqm[1] == 0) begin
-      |                regFile[bank][row][col][15:8] <= data_in[15:8];
-      |            end
-      |          end
-      |        data_out <= regFile[bank][row][col];
-      |    end
-      |endmodule
-    """.stripMargin
-  )
-}
-
-class sdramChisel extends RawModule {
-  val io     = IO(Flipped(new SDRAMIO))
-  val dout   = Wire(UInt(32.W))
-  val out_en = Wire(Bool())
-  out_en := false.B //Enable TristateOutPut
-  val dq = TriStateInBuf(io.dq, dout, out_en) // io
-// 4-memBlocks
-  val mem1  = Module(new sdramBlock())
-  val mem2  = Module(new sdramBlock())
-  val mem11 = Module(new sdramBlock())
-  val mem12 = Module(new sdramBlock())
-//connect_clk
-  mem1.io.clk  := io.clk.asClock
-  mem2.io.clk  := io.clk.asClock
-  mem11.io.clk := io.clk.asClock
-  mem12.io.clk := io.clk.asClock
-
-  val s_idle :: s_read :: s_write :: Nil = Enum(3)
-//decode sigs
-  val sig_active     = (!io.cs) && (!io.ras) && io.cas && io.we
-  val sig_read       = (!io.cs) && io.ras && (!io.cas) && io.we
-  val sig_write      = (!io.cs) && io.ras && (!io.cas) && (!io.we)
-  val sig_write_mode = (!io.cs) && (!io.ras) && (!io.cas) && (!io.we)
-
-  withClockAndReset(io.clk.asClock, false.B) {
-    val state   = RegInit(s_idle)
-    val counter = Reg(UInt(3.W))
-    val data    = Reg(UInt(32.W))
-    //好像DRAM控制器只会发送CAS延迟为2,burstL=2的请求
-    val row          = Reg(Vec(4, UInt(13.W)))
-    val col          = Reg(UInt(13.W))
-    val bankid       = Reg(UInt(2.W))
-    val control_code = Reg(UInt(13.W))
-//bankid
-    mem1.io.bank  := bankid
-    mem2.io.bank  := bankid
-    mem11.io.bank := bankid
-    mem12.io.bank := bankid
-//col
-    mem1.io.col  := col(8, 0)
-    mem2.io.col  := col(8, 0)
-    mem11.io.col := col(8, 0)
-    mem12.io.col := col(8, 0)
-//row
-    mem1.io.row  := row(bankid)
-    mem2.io.row  := row(bankid)
-    mem11.io.row := row(bankid)
-    mem12.io.row := row(bankid)
-//data
-    data             := dq
-    mem1.io.data_in  := data(31, 16)
-    mem11.io.data_in := data(31, 16)
-    mem2.io.data_in  := data(15, 0)
-    mem12.io.data_in := data(15, 0)
-//dqm
-    val demdelay = Reg(UInt(4.W))
-    demdelay     := io.dqm
-    mem1.io.dqm  := demdelay(3, 2)
-    mem11.io.dqm := demdelay(3, 2)
-    mem2.io.dqm  := demdelay(1, 0)
-    mem12.io.dqm := demdelay(1, 0)
-//select data_out
-    dout := Mux(
-      col(9, 9) === 1.U,
-      Cat(mem11.io.data_out, mem12.io.data_out),
-      Cat(mem1.io.data_out, mem2.io.data_out)
-    )
-//enable output of tri_state_buf
-    out_en      := state === s_read
-    mem1.io.we  := Mux(col(9, 9) === 0.U, state === s_write, false.B)
-    mem11.io.we := Mux(col(9, 9) === 1.U, state === s_write, false.B)
-    mem2.io.we  := Mux(col(9, 9) === 0.U, state === s_write, false.B)
-    mem12.io.we := Mux(col(9, 9) === 1.U, state === s_write, false.B)
-    state := MuxLookup(state, s_idle)(
-      List(
-        s_idle -> Mux(sig_read, s_read, Mux(sig_write, s_write, s_idle)),
-        s_read -> Mux(counter === 2.U, s_idle, s_read), //延迟一个周期返回
-        s_write -> s_idle
-      )
-    )
-    when(state === s_read || state === s_write) {
-      counter := counter + 1.U
-    }
-    when(state === s_idle && sig_write_mode) {
-      control_code := io.a
-    }
-    when(state === s_idle && sig_active) {
-      row(io.ba) := io.a
-      counter    := 0.U
-      bankid     := io.ba
-    }
-    when((sig_read || sig_write)) {
-      col     := io.a
-      counter := 0.U
-      bankid  := io.ba
-    }
-  }
-}
-
-/*
-class sdramblock extends BlackBox with HasBlackBoxInline {
+class sdramblock extends BlackBox {
   val io = IO(new Bundle {
     val clock     = Input(Clock())
     val bank      = Input(UInt(2.W))
@@ -200,36 +58,6 @@ class sdramblock extends BlackBox with HasBlackBoxInline {
     val dqm       = Input(UInt(2.W))
     val rdata  = Output(UInt(16.W))
   })
-  setInline(
-    "sdramblock.v",
-    """
-      |module sdramblock(
-      |    input wire clock,
-      |    input wire [1:0] bank,
-      |    input wire [12:0] row,
-      |    input wire [8:0] col,
-      |    input wire [1:0] block_num,
-      |    input wire we,
-      |    input wire [15:0] wdata,
-      |    input wire [1:0] dqm,
-      |    output reg [15:0] rdata
-      |);
-      |     
-      |   import "DPI-C" function int sdram_read(input byte bank, input int row, input int col, 
-                                                input byte block_num);
-      |   import "DPI-C" function void sdram_write(input byte bank, input int row, input int col, 
-      |                                            input int wdata, input byte wmask, input byte block_num);
-      |    always @(posedge clock) begin
-      |           if(we) begin
-      |                sdram_write({6'b0,bank}, {19'b0,row}, {23'b0,col}, {16'b0,wdata}, {6'b0,~dqm}, {6'b0,block_num});                      
-      |          end
-      |    end
-      |    always @(posedge clock) begin
-      |           rdata <= sdram_read({6'b0,bank}, {19'b0,row}, {23'b0,col}, {6'b0,block_num})[15:0];
-      |    end
-      |endmodule
-    """.stripMargin
-  )
 }
 
 
@@ -341,7 +169,7 @@ class sdramChisel extends RawModule {
   block01.io.we := block00.io.we
   block10.io.we := col(9) === 1.U && state === s_write
   block11.io.we := block10.io.we
-}*/
+}
 
 class AXI4SDRAM(address: Seq[AddressSet])(implicit p: Parameters) extends LazyModule {
   val beatBytes = 4
