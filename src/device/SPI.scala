@@ -49,7 +49,8 @@ class APBSPI(address: Seq[AddressSet])(implicit p: Parameters) extends LazyModul
     //mspi.io.in <> in
     spi_bundle <> mspi.io.spi
 
-    val XIP_en = (in.paddr >= 0x30000000.U) && (in.paddr <= 0x3fffffff.U)
+    //val XIP_en = (in.paddr >= 0x30000000.U) && (in.paddr <= 0x3fffffff.U)
+    val XIP_en = false.B
     val spi_rw = Module(new APBSPIMasterReadWrite)
 /*
     mspi.io.in.psel := 0.U
