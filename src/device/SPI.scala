@@ -50,7 +50,8 @@ class APBSPI(address: Seq[AddressSet])(implicit p: Parameters) extends LazyModul
     spi_bundle <> mspi.io.spi
 
     //val XIP_en = (in.paddr >= 0x30000000.U) && (in.paddr <= 0x3fffffff.U)
-    val XIP_en = false.B
+    val XIP_en = (in.paddr(29,24) >= 0x30.U) && (in.paddr(29,24) <= 0x3f.U)
+    //val XIP_en = false.B
     val spi_rw = Module(new APBSPIMasterReadWrite)
 /*
     mspi.io.in.psel := 0.U
@@ -85,7 +86,8 @@ class APBSPI(address: Seq[AddressSet])(implicit p: Parameters) extends LazyModul
 
     val SPI_BASE = 0x10001000
 
-    val flash_addr = in.paddr - 0x30000000.U
+    //val flash_addr = in.paddr - 0x30000000.U
+    val flash_addr = in.paddr(23,0)
 
     spi_rw.io.addr := MuxLookup(state, 0.U(32.W))(Seq(
       s_ss      -> (SPI_BASE + 0x18).U,
