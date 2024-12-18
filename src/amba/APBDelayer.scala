@@ -23,7 +23,7 @@ class apb_delayer extends BlackBox {
 class APBDelayerChisel extends Module {
   val io = IO(new APBDelayerIO)
   //io.out <> io.in
-  val NPC_FREQ = 530 // 530 MHz
+  val NPC_FREQ = 890 // 890 MHz
   val DEVICE_FREQ = 100 // 100 MHz
   val SCALE = 256   // must be 2^n
   val RATIO = NPC_FREQ.toDouble / DEVICE_FREQ.toDouble 
