@@ -1,7 +1,7 @@
 // define this macro to enable fast behavior simulation
 // for flash by skipping SPI transfers
-// 还需要在src/device/SPI.scala中将XIP_en 设置为false
-`define FAST_FLASH
+// 如果启用FAST_FALSH 还需要在src/device/SPI.scala中将XIP_en 设置为false
+//`define FAST_FLASH
 
 module spi_top_apb #(
   parameter flash_addr_start = 32'h30000000,
