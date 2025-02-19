@@ -31,6 +31,8 @@ module sdram_top_apb (
   typedef enum [1:0] { ST_IDLE, ST_WAIT_ACCEPT, ST_WAIT_ACK } state_t;
   reg [1:0] state;
   wire req_accept;
+  wire is_read  = ((in_psel && !in_penable) || (state == ST_WAIT_ACCEPT)) && !in_pwrite;
+  wire is_write = ((in_psel && !in_penable) || (state == ST_WAIT_ACCEPT)) &&  in_pwrite;
 
   always @(posedge clock) begin
     if (reset) state <= ST_IDLE;
@@ -43,8 +45,6 @@ module sdram_top_apb (
       endcase
   end
 
-  wire is_read  = ((in_psel && !in_penable) || (state == ST_WAIT_ACCEPT)) && !in_pwrite;
-  wire is_write = ((in_psel && !in_penable) || (state == ST_WAIT_ACCEPT)) &&  in_pwrite;
   sdram_axi_core #(
     .SDRAM_MHZ(100),
     .SDRAM_ADDR_W(24),

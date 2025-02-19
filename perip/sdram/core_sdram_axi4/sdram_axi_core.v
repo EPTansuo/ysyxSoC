@@ -84,6 +84,7 @@ localparam SDRAM_START_DELAY     = 100000 / (1000 / SDRAM_MHZ); // 100uS
 localparam SDRAM_REFRESH_CYCLES  = (64000*SDRAM_MHZ) / SDRAM_REFRESH_CNT-1;
 
 localparam CMD_W             = 4;
+localparam CMD_INHIBIT       = 4'b1000; //如果command_q[3]不被复位成1，会导致片选总是0， sdram内部的信号无法被复位，导致x态
 localparam CMD_NOP           = 4'b0111;
 localparam CMD_ACTIVE        = 4'b0011;
 localparam CMD_READ          = 4'b0101;
@@ -482,7 +483,7 @@ integer idx;
 always @ (posedge clk_i or posedge rst_i)
 if (rst_i)
 begin
-    command_q       <= CMD_NOP;
+    command_q       <= CMD_INHIBIT;
     data_q          <= 32'b0;
     addr_q          <= {SDRAM_ROW_W{1'b0}};
     bank_q          <= {SDRAM_BANK_W{1'b0}};
